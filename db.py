@@ -140,7 +140,37 @@ def get_respondent(responden_id: int) -> dict | None:
         responden["jawaban"] = cur.fetchall()
     return responden
 
+def get_respondents_detail(ids: list[int]) -> list[dict]:
+    """Ambil banyak responden beserta jawaban & penilaiannya dalam 2 query."""
+    if not ids:
+        return []
+    ids = [int(i) for i in ids]
+    placeholder = ",".join(["%s"] * len(ids))
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""SELECT * FROM responden WHERE id IN ({placeholder})
+                ORDER BY tanggal_pengisian, created_at, id""",
+            ids,
+        )
+        respondents = cur.fetchall()
+        cur.execute(
+            f"""SELECT j.responden_id, j.id AS jawaban_id, j.kode_kompetensi, j.jawaban,
+                       p.skor, p.alasan, p.sumber, p.model, p.updated_at
+                FROM jawaban j
+                LEFT JOIN penilaian p ON p.jawaban_id = j.id
+                WHERE j.responden_id IN ({placeholder})
+                ORDER BY j.responden_id, j.kode_kompetensi""",
+            ids,
+        )
+        semua_jawaban = cur.fetchall()
 
+    per_responden: dict[int, list] = {}
+    for j in semua_jawaban:
+        per_responden.setdefault(j["responden_id"], []).append(j)
+    for r in respondents:
+        r["jawaban"] = per_responden.get(r["id"], [])
+    return respondents
+    
 def update_scores(responden_id: int, scores: dict[str, dict]) -> None:
     """Perbarui penilaian (dipakai saat admin menilai ulang)."""
     with get_conn() as conn, conn.cursor() as cur:
