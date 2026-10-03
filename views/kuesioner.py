@@ -144,7 +144,7 @@ c2.date_input("Tanggal pengisian *", key="f_tanggal", format="DD/MM/YYYY",
 
 for i, k in enumerate(KOMPETENSI, start=1):
     st.divider()
-    st.subheader(f"{k['kode']}. {k['nama']}")
+    # st.subheader(f"{k['kode']}. {k['nama']}")
     # st.caption(k["definisi"])
     st.markdown(f"**{i}. {k['pertanyaan']}**")
     st.markdown("Dalam jawaban Anda, jelaskan:\n" + "\n".join(f"- {p}" for p in k["panduan"]))
