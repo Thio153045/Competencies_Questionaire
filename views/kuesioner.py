@@ -22,7 +22,7 @@ if st.session_state.get("terkirim"):
     st.title("Terima kasih 🙏")
     st.success("Jawaban Anda telah berhasil dikirim dan tersimpan.")
     st.write("Terima kasih atas kesediaan Anda mengisi kuesioner ini.")
-    st.button("Isi kuesioner baru", on_click=reset_form)
+   # st.button("Isi kuesioner baru", on_click=reset_form)
     st.stop()
 
 
