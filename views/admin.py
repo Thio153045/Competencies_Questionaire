@@ -21,7 +21,7 @@ if "admin" not in st.session_state:
         try:
             admin = db.verify_admin(username.strip(), password)
         except Exception as exc:  # noqa: BLE001
-            st.error(f"Tidak dapat terhubung ke database ({type(exc).__name__}).")
+            st.error(f"Tidak dapat terhubung ke database: {exc}")
             st.stop()
         if admin:
             st.session_state["admin"] = admin
