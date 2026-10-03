@@ -1,10 +1,13 @@
 """Halaman Admin HR: login, daftar responden, detail jawaban & skor, export PDF."""
 
+from datetime import datetime
+
 import pandas as pd
 import streamlit as st
 
 import db
-from pdf_report import build_pdf
+from excel_report import build_excel
+from pdf_report import build_pdf, nama_file_aman
 from questions import KOMPETENSI_BY_KODE, LABEL_SKOR
 from scoring import score_answers
 
@@ -13,8 +16,6 @@ from scoring import score_answers
 # ---------------------------------------------------------------------------
 if "admin" not in st.session_state:
     st.title("🔒 Login Admin HR")
-
-    
     with st.form("login"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
@@ -36,11 +37,12 @@ admin = st.session_state["admin"]
 with st.sidebar:
     st.write(f"Masuk sebagai **{admin['nama']}**")
     if st.button("Keluar"):
-        del st.session_state["admin"]
+        for key in ("admin", "export_massal"):
+            st.session_state.pop(key, None)
         st.rerun()
 
 # ---------------------------------------------------------------------------
-# Daftar responden
+# Daftar responden + filter
 # ---------------------------------------------------------------------------
 st.title("Hasil Kuesioner Kompetensi")
 
@@ -56,14 +58,26 @@ if not rows:
 df = pd.DataFrame(rows)
 for kol in ("skor_total", "rata_rata", "jumlah_aturan"):
     df[kol] = pd.to_numeric(df[kol])
-cari = st.text_input("🔎 Cari nama / posisi / unit kerja")
+df["tanggal_pengisian"] = pd.to_datetime(df["tanggal_pengisian"]).dt.date
+
+f1, f2 = st.columns([3, 2])
+cari = f1.text_input("🔎 Cari nama / posisi / unit kerja")
+tgl_min, tgl_max = df["tanggal_pengisian"].min(), df["tanggal_pengisian"].max()
+rentang = f2.date_input("📅 Rentang tanggal pengisian", value=(tgl_min, tgl_max),
+                        format="DD/MM/YYYY")
+
 if cari:
     mask = (
-        df["nama"].str.contains(cari, case=False, na=False)
-        | df["posisi"].str.contains(cari, case=False, na=False)
-        | df["unit_kerja"].str.contains(cari, case=False, na=False)
+        df["nama"].str.contains(cari, case=False, na=False, regex=False)
+        | df["posisi"].str.contains(cari, case=False, na=False, regex=False)
+        | df["unit_kerja"].str.contains(cari, case=False, na=False, regex=False)
     )
     df = df[mask]
+if isinstance(rentang, (tuple, list)) and len(rentang) == 2:
+    dari, sampai = rentang
+    df = df[(df["tanggal_pengisian"] >= dari) & (df["tanggal_pengisian"] <= sampai)]
+else:
+    dari = sampai = None
 
 tampil = df.rename(columns={
     "nama": "Nama", "posisi": "Posisi", "unit_kerja": "Unit Kerja",
@@ -71,21 +85,66 @@ tampil = df.rename(columns={
     "rata_rata": "Rata-rata", "jumlah_aturan": "Dinilai Aturan",
 })[["Nama", "Posisi", "Unit Kerja", "Tanggal", "Total (maks 25)", "Rata-rata", "Dinilai Aturan"]]
 st.dataframe(tampil, hide_index=True, width="stretch")
-st.caption("Kolom *Dinilai Aturan* = jumlah jawaban yang dinilai tanpa AI (fallback).")
+st.caption(
+    f"Menampilkan **{len(df)}** dari {len(rows)} responden. "
+    "Kolom *Dinilai Aturan* = jumlah jawaban yang dinilai tanpa AI (fallback)."
+)
 
 if df.empty:
     st.stop()
 
 # ---------------------------------------------------------------------------
+# Export semua ke Excel (sesuai filter)
+# ---------------------------------------------------------------------------
+st.divider()
+st.subheader("📊 Export Semua ke Excel")
+st.caption(
+    f"Yang diekspor adalah **{len(df)} responden** sesuai filter di atas. "
+    "File berisi sheet **Rekap** (skor per responden), **Detail Jawaban** "
+    "(jawaban, skor, dan alasan penilaian), dan **Keterangan**."
+)
+
+ids = df["id"].astype(int).tolist()
+kunci_export = tuple(ids)
+
+if st.button("Siapkan file Excel", type="primary"):
+    keterangan = []
+    if cari:
+        keterangan.append(f"Pencarian: '{cari}'")
+    if dari and sampai:
+        keterangan.append(f"Periode {dari:%d-%m-%Y} s.d. {sampai:%d-%m-%Y}")
+    stempel = datetime.now().strftime("%Y%m%d_%H%M")
+
+    with st.spinner(f"Menyiapkan Excel untuk {len(ids)} responden..."):
+        data_responden = db.get_respondents_detail(ids)
+        isi = build_excel(data_responden, " | ".join(keterangan))
+
+    st.session_state["export_massal"] = {
+        "kunci": kunci_export,
+        "isi": isi,
+        "nama": f"rekap_kompetensi_{stempel}.xlsx",
+    }
+
+hasil = st.session_state.get("export_massal")
+if hasil and hasil["kunci"] == kunci_export:
+    st.download_button(
+        f"⬇️ Unduh {hasil['nama']}", data=hasil["isi"], file_name=hasil["nama"],
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+elif hasil:
+    st.caption("Filter berubah. Klik **Siapkan file Excel** lagi.")
+
+# ---------------------------------------------------------------------------
 # Detail responden
 # ---------------------------------------------------------------------------
 st.divider()
+st.subheader("🔍 Detail Responden")
 pilihan = {f"{r['nama']} – {r['posisi']} (ID {r['id']})": int(r["id"]) for _, r in df.iterrows()}
 label = st.selectbox("Pilih responden untuk melihat detail", list(pilihan.keys()))
 rid = pilihan[label]
 r = db.get_respondent(rid)
 
-st.subheader(r["nama"])
+st.markdown(f"### {r['nama']}")
 c1, c2, c3 = st.columns(3)
 c1.metric("Posisi", r["posisi"])
 c2.metric("Unit kerja", r["unit_kerja"])
@@ -115,22 +174,16 @@ for j in r["jawaban"]:
         st.markdown(f"**Pertanyaan:** {k['pertanyaan']}")
         st.markdown("**Jawaban:**")
         st.info(j["jawaban"])
-        sumber = j["sumber"] + (f" · {j['model']}" if j.get("model") else "")
+        sumber = (j["sumber"] or "-") + (f" · {j['model']}" if j.get("model") else "")
         st.markdown(f"**Skor:** {j['skor']} – {LABEL_SKOR.get(j['skor'], '-')}  \n"
                     f"**Sumber penilaian:** {sumber}")
         st.markdown(f"**Alasan:** {j['alasan']}")
 
-# ---------------------------------------------------------------------------
-# Aksi: export PDF, nilai ulang, hapus
-# ---------------------------------------------------------------------------
-st.divider()
 a1, a2, a3 = st.columns(3)
-
-nama_file = "".join(c if c.isalnum() else "_" for c in r["nama"])
 a1.download_button(
-    "📄 Export PDF",
+    "📄 Export PDF responden ini",
     data=build_pdf(r),
-    file_name=f"laporan_kompetensi_{nama_file}_{rid}.pdf",
+    file_name=f"laporan_kompetensi_{nama_file_aman(r['nama'])}_{rid}.pdf",
     mime="application/pdf",
     width="stretch",
 )
@@ -144,11 +197,15 @@ if a2.button("🔄 Nilai ulang", width="stretch",
             answers, cfg.get("api_key"), cfg.get("model", "gemini-3.1-flash-lite")
         )
         db.update_scores(rid, scores)
-    st.session_state["flash"] = ("warning", error_ai) if error_ai else ("success", "Penilaian diperbarui dengan AI.")
+    st.session_state.pop("export_massal", None)
+    st.session_state["flash"] = (
+        ("warning", error_ai) if error_ai else ("success", "Penilaian diperbarui dengan AI.")
+    )
     st.rerun()
 
 with a3.popover("🗑️ Hapus", width="stretch"):
     st.write("Hapus responden ini beserta seluruh jawabannya?")
     if st.button("Ya, hapus", type="primary"):
         db.delete_respondent(rid)
+        st.session_state.pop("export_massal", None)
         st.rerun()
