@@ -4,11 +4,11 @@ KOMPETENSI = [
     {
         "kode": "A",
         "nama": "Komunikasi Efektif",
-        "definisi": (
-            "Kemampuan menyampaikan ide secara jelas, mendengarkan aktif, dan "
-            "menyesuaikan cara komunikasi dengan lawan bicara agar pesan dipahami "
-            "dan ditindaklanjuti."
-        ),
+       # "definisi": (
+         #   "Kemampuan menyampaikan ide secara jelas, mendengarkan aktif, dan "
+         #   "menyesuaikan cara komunikasi dengan lawan bicara agar pesan dipahami "
+           # "dan ditindaklanjuti."
+      #  ),
         "pertanyaan": (
             "Ceritakan pengalaman ketika Anda harus menjelaskan hal yang rumit atau "
             "penting kepada orang yang memiliki latar belakang atau pandangan berbeda "
@@ -30,11 +30,11 @@ KOMPETENSI = [
     {
         "kode": "B",
         "nama": "Integritas & Etika Kerja",
-        "definisi": (
-            "Konsistensi antara ucapan dan tindakan, kejujuran, kepatuhan pada aturan "
-            "dan nilai organisasi, serta tanggung jawab atas tindakan sendiri, termasuk "
-            "ketika tidak ada yang mengawasi."
-        ),
+       # "definisi": (
+        #    "Konsistensi antara ucapan dan tindakan, kejujuran, kepatuhan pada aturan "
+          #  "dan nilai organisasi, serta tanggung jawab atas tindakan sendiri, termasuk "
+          #  "ketika tidak ada yang mengawasi."
+      #  ),
         "pertanyaan": (
             "Ceritakan situasi ketika Anda diminta atau tergoda melakukan sesuatu yang "
             "bertentangan dengan aturan atau nilai-nilai Anda."
@@ -55,11 +55,11 @@ KOMPETENSI = [
     {
         "kode": "C",
         "nama": "Kemauan Belajar (Learning Agility)",
-        "definisi": (
-            "Keinginan dan kemampuan untuk cepat mempelajari hal baru, mengambil "
-            "pelajaran dari pengalaman, terbuka terhadap umpan balik, dan menerapkannya "
-            "pada situasi yang berbeda."
-        ),
+      #  "definisi": (
+      #      "Keinginan dan kemampuan untuk cepat mempelajari hal baru, mengambil "
+        #    "pelajaran dari pengalaman, terbuka terhadap umpan balik, dan menerapkannya "
+      #      "pada situasi yang berbeda."
+     #   ),
         "pertanyaan": (
             "Ceritakan pengalaman ketika Anda harus menguasai keterampilan, sistem, atau "
             "pekerjaan baru dalam waktu singkat."
@@ -81,11 +81,11 @@ KOMPETENSI = [
     {
         "kode": "D",
         "nama": "Motivasi Berprestasi & Loyalitas Organisasi",
-        "definisi": (
-            "Dorongan untuk mencapai hasil terbaik melebihi standar, menetapkan target "
-            "yang menantang, serta keterikatan dan komitmen untuk berkontribusi jangka "
-            "panjang bagi kemajuan organisasi."
-        ),
+    #    "definisi": (
+      #      "Dorongan untuk mencapai hasil terbaik melebihi standar, menetapkan target "
+      #      "yang menantang, serta keterikatan dan komitmen untuk berkontribusi jangka "
+       #     "panjang bagi kemajuan organisasi."
+     #   ),
         "pertanyaan": "Ceritakan pencapaian kerja yang paling Anda banggakan.",
         "panduan": [
             "Apa pencapaiannya dan apa peran Anda secara spesifik?",
@@ -105,11 +105,11 @@ KOMPETENSI = [
     {
         "kode": "E",
         "nama": "Ketahanan & Pengendalian Diri (Resilience)",
-        "definisi": (
-            "Kemampuan tetap tenang, fokus, dan efektif di bawah tekanan, mengelola "
-            "emosi secara sehat, serta bangkit kembali dengan cepat dari hambatan atau "
-            "kegagalan."
-        ),
+       # "definisi": (
+         #   "Kemampuan tetap tenang, fokus, dan efektif di bawah tekanan, mengelola "
+       #     "emosi secara sehat, serta bangkit kembali dengan cepat dari hambatan atau "
+         #   "kegagalan."
+       # ),
         "pertanyaan": (
             "Ceritakan periode kerja paling menekan yang pernah Anda alami, misalnya "
             "tenggat ketat, beban kerja berlebih, atau menghadapi orang yang sulit."
