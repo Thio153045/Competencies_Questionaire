@@ -30,11 +30,11 @@ def load_config() -> dict:
 def get_conn():
     cfg = load_config()["mysql"]
     conn = pymysql.connect(
-        db_host=cfg.get("host", "localhost"),
-        db_port=int(cfg.get("port", 3307)),
-        db_user=cfg["db_user"],
-        db_password=cfg.get("password", ""),
-        db_name=cfg["database"],
+        host=cfg.get("db_host", "127.0.0.1"),
+        port=int(cfg.get("db_port", 3307)),
+        user=cfg["db_user"],
+        password=cfg.get("db_password", ""),
+        database=cfg["db_name"],
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=False,
