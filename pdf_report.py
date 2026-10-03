@@ -1,4 +1,4 @@
-"""Pembuatan laporan PDF hasil kuesioner per responden."""
+"""Pembuatan laporan PDF per responden."""
 
 from __future__ import annotations
 
@@ -8,11 +8,12 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import (
-    KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    BaseDocTemplate, Frame, KeepTogether, PageTemplate,
+    Paragraph, Spacer, Table, TableStyle,
 )
 
 from questions import KOMPETENSI_BY_KODE, LABEL_SKOR
@@ -20,59 +21,93 @@ from questions import KOMPETENSI_BY_KODE, LABEL_SKOR
 WARNA_UTAMA = colors.HexColor("#1F3A5F")
 WARNA_GARIS = colors.HexColor("#C9D3DF")
 WARNA_LATAR = colors.HexColor("#F2F5F9")
+MARGIN = 2 * cm
+
+
+# ---------------------------------------------------------------------------
+# Gaya & utilitas
+# ---------------------------------------------------------------------------
+
+def _styles() -> dict:
+    ss = getSampleStyleSheet()
+    normal = ParagraphStyle("n", parent=ss["Normal"], fontSize=9.5, leading=13)
+    return {
+        "judul": ParagraphStyle("judul", parent=ss["Title"], textColor=WARNA_UTAMA, fontSize=16),
+        "sub": ParagraphStyle("sub", parent=ss["Normal"], alignment=TA_CENTER,
+                              textColor=colors.grey, fontSize=9),
+        "h2": ParagraphStyle("h2", parent=ss["Heading2"], textColor=WARNA_UTAMA,
+                             fontSize=12, spaceBefore=12, spaceAfter=6),
+        "h3": ParagraphStyle("h3", parent=normal, fontName="Helvetica-Bold", fontSize=10.5,
+                             textColor=WARNA_UTAMA, spaceBefore=8, spaceAfter=3),
+        "normal": normal,
+        "kecil": ParagraphStyle("k", parent=normal, fontSize=8.5,
+                                textColor=colors.HexColor("#444444")),
+        "tebal": ParagraphStyle("b", parent=normal, fontName="Helvetica-Bold"),
+        "header": ParagraphStyle("sh", parent=normal, fontName="Helvetica-Bold",
+                                 textColor=colors.white),
+        "sel": ParagraphStyle("sel", parent=normal, fontSize=8.5, leading=11),
+        "sel_tengah": ParagraphStyle("selc", parent=normal, fontSize=8.5, leading=11,
+                                     alignment=TA_CENTER),
+        "header_tengah": ParagraphStyle("shc", parent=normal, fontName="Helvetica-Bold",
+                                        textColor=colors.white, fontSize=8.5,
+                                        alignment=TA_CENTER),
+    }
 
 
 def _p(teks, style) -> Paragraph:
     """Paragraph aman: escape karakter XML dan pertahankan baris baru."""
-    return Paragraph(escape(str(teks or "")).replace("\n", "<br/>"), style)
+    return Paragraph(escape(str(teks if teks is not None else "")).replace("\n", "<br/>"), style)
+
+
+def _tgl(nilai) -> str:
+    return nilai.strftime("%d-%m-%Y") if hasattr(nilai, "strftime") else str(nilai or "-")
+
+
+def _skor_map(r: dict) -> dict:
+    return {j["kode_kompetensi"]: j["skor"] for j in r["jawaban"]}
 
 
 def _footer(canvas, doc):
     canvas.saveState()
+    lebar = canvas._pagesize[0]
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(colors.grey)
-    canvas.drawString(2 * cm, 1.2 * cm, "Laporan Kuesioner Kompetensi - Rahasia")
-    canvas.drawRightString(A4[0] - 2 * cm, 1.2 * cm, f"Halaman {doc.page}")
+    canvas.drawString(MARGIN, 1.2 * cm, "Laporan Kuesioner Kompetensi - Rahasia")
+    canvas.drawRightString(lebar - MARGIN, 1.2 * cm, f"Halaman {doc.page}")
     canvas.restoreState()
 
 
-def build_pdf(responden: dict) -> bytes:
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf, pagesize=A4, leftMargin=2 * cm, rightMargin=2 * cm,
-        topMargin=2 * cm, bottomMargin=2 * cm,
-        title=f"Laporan Kompetensi - {responden['nama']}",
-    )
-    ss = getSampleStyleSheet()
-    judul = ParagraphStyle("judul", parent=ss["Title"], textColor=WARNA_UTAMA, fontSize=16)
-    sub = ParagraphStyle("sub", parent=ss["Normal"], alignment=TA_CENTER,
-                         textColor=colors.grey, fontSize=9)
-    h2 = ParagraphStyle("h2", parent=ss["Heading2"], textColor=WARNA_UTAMA,
-                        fontSize=12, spaceBefore=12, spaceAfter=6)
-    normal = ParagraphStyle("n", parent=ss["Normal"], fontSize=9.5, leading=13)
-    kecil = ParagraphStyle("k", parent=normal, fontSize=8.5, textColor=colors.HexColor("#444444"))
-    tebal = ParagraphStyle("b", parent=normal, fontName="Helvetica-Bold")
-    sel_header = ParagraphStyle("sh", parent=normal, fontName="Helvetica-Bold",
-                                textColor=colors.white)
+def _doc(buf, judul: str, halaman_awal: str = "portrait") -> BaseDocTemplate:
+    """Dokumen dengan dua template halaman: 'portrait' dan 'landscape'.
 
-    story = [
-        Paragraph("Laporan Hasil Kuesioner Kompetensi", judul),
-        Paragraph(f"Dicetak {datetime.now():%d-%m-%Y %H:%M}", sub),
-        Spacer(1, 12),
-    ]
+    Template yang disebut di halaman_awal dipakai untuk halaman pertama.
+    """
+    doc = BaseDocTemplate(buf, pagesize=A4, title=judul,
+                          leftMargin=MARGIN, rightMargin=MARGIN,
+                          topMargin=MARGIN, bottomMargin=MARGIN)
+    templates = []
+    for nama, ukuran in (("portrait", A4), ("landscape", landscape(A4))):
+        frame = Frame(MARGIN, MARGIN, ukuran[0] - 2 * MARGIN, ukuran[1] - 2 * MARGIN, id=nama)
+        templates.append(PageTemplate(id=nama, frames=[frame], pagesize=ukuran, onPage=_footer))
+    templates.sort(key=lambda t: t.id != halaman_awal)
+    doc.addPageTemplates(templates)
+    return doc
 
-    # Identitas
-    story.append(Paragraph("Identitas Responden", h2))
+
+# ---------------------------------------------------------------------------
+# Isi laporan satu responden (dipakai ulang di laporan massal)
+# ---------------------------------------------------------------------------
+
+def _story_responden(r: dict, s: dict) -> list:
+    story = [Paragraph("Identitas Responden", s["h2"])]
     identitas = [
-        ["Nama lengkap", responden["nama"]],
-        ["Posisi / jabatan", responden["posisi"]],
-        ["Unit kerja / departemen", responden["unit_kerja"]],
-        ["Lama bekerja", f"{responden['lama_bekerja']} tahun"],
-        ["Tanggal pengisian", f"{responden['tanggal_pengisian']:%d-%m-%Y}"
-         if hasattr(responden["tanggal_pengisian"], "strftime")
-         else str(responden["tanggal_pengisian"])],
+        ["Nama lengkap", r["nama"]],
+        ["Posisi / jabatan", r["posisi"]],
+        ["Unit kerja / departemen", r["unit_kerja"]],
+        ["Lama bekerja", f"{r['lama_bekerja']} tahun"],
+        ["Tanggal pengisian", _tgl(r["tanggal_pengisian"])],
     ]
-    t = Table([[_p(a, tebal), _p(b, normal)] for a, b in identitas],
+    t = Table([[_p(a, s["tebal"]), _p(b, s["normal"])] for a, b in identitas],
               colWidths=[5 * cm, 12 * cm])
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
@@ -81,25 +116,24 @@ def build_pdf(responden: dict) -> bytes:
     ]))
     story.append(t)
 
-    # Ringkasan skor
-    jawaban = responden["jawaban"]
+    jawaban = r["jawaban"]
     skor_list = [j["skor"] for j in jawaban if j["skor"] is not None]
-    story.append(Paragraph("Ringkasan Skor", h2))
-    rows = [[_p("Kompetensi", sel_header), _p("Skor", sel_header),
-             _p("Level", sel_header), _p("Sumber", sel_header)]]
+    story.append(Paragraph("Ringkasan Skor", s["h2"]))
+    rows = [[_p("Kompetensi", s["header"]), _p("Skor", s["header"]),
+             _p("Level", s["header"]), _p("Sumber", s["header"])]]
     for j in jawaban:
         k = KOMPETENSI_BY_KODE[j["kode_kompetensi"]]
         rows.append([
-            _p(f"{k['kode']}. {k['nama']}", normal),
-            _p(j["skor"] if j["skor"] is not None else "-", normal),
-            _p(LABEL_SKOR.get(j["skor"], "-"), normal),
-            _p(j["sumber"] or "-", normal),
+            _p(f"{k['kode']}. {k['nama']}", s["normal"]),
+            _p(j["skor"] if j["skor"] is not None else "-", s["normal"]),
+            _p(LABEL_SKOR.get(j["skor"], "-"), s["normal"]),
+            _p(j["sumber"] or "-", s["normal"]),
         ])
     if skor_list:
         rata = sum(skor_list) / len(skor_list)
-        rows.append([_p("Total / Rata-rata", tebal),
-                     _p(f"{sum(skor_list)} / {rata:.2f}", tebal),
-                     _p(LABEL_SKOR.get(round(rata), "-"), tebal), _p("", normal)])
+        rows.append([_p("Total / Rata-rata", s["tebal"]),
+                     _p(f"{sum(skor_list)} / {rata:.2f}", s["tebal"]),
+                     _p(LABEL_SKOR.get(round(rata), "-"), s["tebal"]), _p("", s["normal"])])
     t = Table(rows, colWidths=[8.5 * cm, 2.5 * cm, 3.5 * cm, 2.5 * cm], repeatRows=1)
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
@@ -112,22 +146,18 @@ def build_pdf(responden: dict) -> bytes:
     story.append(Paragraph(
         "Skala: 5 = Sangat kuat, 4 = Kuat, 3 = Memadai, 2 = Kurang, 1 = Sangat kurang. "
         "Sumber 'AI' = dinilai Gemini; 'Aturan' = dinilai aturan kata kunci tanpa AI.",
-        kecil,
+        s["kecil"],
     ))
 
-    # Detail jawaban
-    story.append(Paragraph("Detail Jawaban dan Penilaian", h2))
+    story.append(Paragraph("Detail Jawaban dan Penilaian", s["h2"]))
     for j in jawaban:
         k = KOMPETENSI_BY_KODE[j["kode_kompetensi"]]
-        blok = [
-            Paragraph(f"{k['kode']}. {escape(k['nama'])}",
-                      ParagraphStyle("h3", parent=tebal, fontSize=10.5, textColor=WARNA_UTAMA,
-                                     spaceBefore=8, spaceAfter=3)),
-            _p(f"Pertanyaan: {k['pertanyaan']}", kecil),
+        story.append(KeepTogether([
+            Paragraph(f"{k['kode']}. {escape(k['nama'])}", s["h3"]),
+            _p(f"Pertanyaan: {k['pertanyaan']}", s["kecil"]),
             Spacer(1, 4),
-        ]
-        story.append(KeepTogether(blok))
-        kotak = Table([[_p(j["jawaban"], normal)]], colWidths=[17 * cm])
+        ]))
+        kotak = Table([[_p(j["jawaban"], s["normal"])]], colWidths=[17 * cm])
         kotak.setStyle(TableStyle([
             ("BOX", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
             ("BACKGROUND", (0, 0), (-1, -1), WARNA_LATAR),
@@ -140,8 +170,29 @@ def build_pdf(responden: dict) -> bytes:
         if j.get("model"):
             sumber += f" ({j['model']})"
         story.append(_p(
-            f"Skor: {j['skor']} ({LABEL_SKOR.get(j['skor'], '-')}) | Sumber: {sumber}", tebal))
-        story.append(_p(f"Alasan: {j['alasan'] or '-'}", normal))
+            f"Skor: {j['skor']} ({LABEL_SKOR.get(j['skor'], '-')}) | Sumber: {sumber}",
+            s["tebal"]))
+        story.append(_p(f"Alasan: {j['alasan'] or '-'}", s["normal"]))
+    return story
 
-    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+
+# ---------------------------------------------------------------------------
+# API publik
+# ---------------------------------------------------------------------------
+
+def build_pdf(responden: dict) -> bytes:
+    """Laporan lengkap satu responden."""
+    buf = io.BytesIO()
+    s = _styles()
+    doc = _doc(buf, f"Laporan Kompetensi - {responden['nama']}")
+    story = [
+        Paragraph("Laporan Hasil Kuesioner Kompetensi", s["judul"]),
+        Paragraph(f"Dicetak {datetime.now():%d-%m-%Y %H:%M}", s["sub"]),
+        Spacer(1, 12),
+    ] + _story_responden(responden, s)
+    doc.build(story)
     return buf.getvalue()
+
+
+def nama_file_aman(teks: str) -> str:
+    return "".join(c if c.isalnum() else "_" for c in str(teks)).strip("_")[:60] or "responden"
