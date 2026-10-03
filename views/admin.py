@@ -13,6 +13,15 @@ from scoring import score_answers
 # ---------------------------------------------------------------------------
 if "admin" not in st.session_state:
     st.title("🔒 Login Admin HR")
+
+    # === DIAGNOSA SEMENTARA, hapus setelah selesai ===
+    import os
+    cfg_debug = db.load_config().get("mysql", {})
+    st.write("Key yang terbaca:", list(cfg_debug.keys()))
+    st.write("db_host:", cfg_debug.get("db_host"), "| db_port:", cfg_debug.get("db_port"))
+    st.write("Ada secrets.toml di repo:", os.path.exists(".streamlit/secrets.toml"))
+    # === AKHIR DIAGNOSA ===
+
     with st.form("login"):
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
