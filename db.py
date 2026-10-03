@@ -183,6 +183,37 @@ def update_scores(responden_id: int, scores: dict[str, dict]) -> None:
                 (s["skor"], s["alasan"], s["sumber"], s.get("model"), responden_id, kode),
             )
 
+# ---------------------------------------------------------------------------
+# Draf jawaban (simpan otomatis selama pengisian)
+# ---------------------------------------------------------------------------
+
+def save_draft(token: str, data: dict) -> None:
+    import json
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """INSERT INTO draf (token, data) VALUES (%s, %s)
+               ON DUPLICATE KEY UPDATE data = VALUES(data)""",
+            (token, json.dumps(data, ensure_ascii=False, default=str)),
+        )
+
+
+def load_draft(token: str) -> dict | None:
+    import json
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT data FROM draf WHERE token = %s", (token,))
+        row = cur.fetchone()
+    return json.loads(row["data"]) if row else None
+
+
+def delete_draft(token: str) -> None:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM draf WHERE token = %s", (token,))
+
+
+def cleanup_drafts(hari: int = 14) -> None:
+    """Hapus draf yang tidak diperbarui lebih dari `hari` hari."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM draf WHERE updated_at < NOW() - INTERVAL %s DAY", (int(hari),))
 
 def delete_respondent(responden_id: int) -> None:
     with get_conn() as conn, conn.cursor() as cur:
