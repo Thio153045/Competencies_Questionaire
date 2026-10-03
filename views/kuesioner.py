@@ -60,7 +60,7 @@ with st.form("form_kuesioner"):
     for i, k in enumerate(KOMPETENSI, start=1):
         st.divider()
         st.subheader(f"{k['kode']}. {k['nama']}")
-        st.caption(k["definisi"])
+        # st.caption(k["definisi"])
         st.markdown(f"**{i}. {k['pertanyaan']}**")
         st.markdown("Dalam jawaban Anda, jelaskan:\n" + "\n".join(f"- {p}" for p in k["panduan"]))
         jawaban[k["kode"]] = st.text_area(
