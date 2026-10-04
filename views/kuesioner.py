@@ -159,7 +159,7 @@ st.divider()
 st.subheader("Pernyataan Responden")
 st.checkbox(
     "Dengan ini saya menyatakan bahwa seluruh jawaban di atas saya isi sendiri" 
-    "dengan jujur tanpa bantuan siapapun termasuk AI dan sesuai dengan pengalaman saya."
+    " dengan jujur tanpa bantuan siapapun termasuk AI dan sesuai dengan pengalaman saya."
     "Jika terindikasi adanya bantuan AI maka saya bersedia jawaban saya ditolak dan dianggap gagal.",
     key="f_pernyataan", on_change=simpan_draf,
 )
