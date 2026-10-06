@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape
 
@@ -196,3 +197,17 @@ def build_pdf(responden: dict) -> bytes:
 
 def nama_file_aman(teks: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in str(teks)).strip("_")[:60] or "responden"
+
+
+def build_zip(respondents: list[dict]) -> bytes:
+    """ZIP berisi satu PDF laporan untuk setiap responden."""
+    buf = io.BytesIO()
+    dipakai = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for r in respondents:
+            nama = f"laporan_kompetensi_{nama_file_aman(r['nama'])}_{r['id']}.pdf"
+            if nama in dipakai:  # pengaman; ID responden sudah membuat nama unik
+                continue
+            dipakai.add(nama)
+            zf.writestr(nama, build_pdf(r))
+    return buf.getvalue()
