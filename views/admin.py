@@ -7,7 +7,7 @@ import streamlit as st
 
 import db
 from excel_report import build_excel
-from pdf_report import build_pdf, nama_file_aman
+from pdf_report import build_pdf, build_zip, nama_file_aman
 from questions import KOMPETENSI_BY_KODE, LABEL_SKOR
 from scoring import score_answers
 
@@ -94,20 +94,28 @@ if df.empty:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Export semua ke Excel (sesuai filter)
+# Export semua (sesuai filter): Excel atau ZIP berisi PDF per responden
 # ---------------------------------------------------------------------------
 st.divider()
-st.subheader("📊 Export Semua ke Excel")
-st.caption(
-    f"Yang diekspor adalah **{len(df)} responden** sesuai filter di atas. "
-    "File berisi sheet **Rekap** (skor per responden), **Detail Jawaban** "
-    "(jawaban, skor, dan alasan penilaian), dan **Keterangan**."
-)
+st.subheader("📦 Export Semua")
+st.caption(f"Yang diekspor adalah **{len(df)} responden** sesuai filter di atas.")
+
+PILIHAN_FORMAT = {
+    "📊 Excel (rekap + detail jawaban)": "excel",
+    "🗂️ ZIP berisi PDF per responden": "zip",
+}
+label_format = st.radio("Format", list(PILIHAN_FORMAT.keys()), horizontal=True)
+jenis_format = PILIHAN_FORMAT[label_format]
+if jenis_format == "excel":
+    st.caption("Sheet **Rekap** (skor per responden), **Detail Jawaban** "
+               "(jawaban, skor, alasan), dan **Keterangan**.")
+else:
+    st.caption("Satu file PDF laporan lengkap untuk setiap responden, dikemas dalam satu ZIP.")
 
 ids = df["id"].astype(int).tolist()
-kunci_export = tuple(ids)
+kunci_export = (tuple(ids), jenis_format)
 
-if st.button("Siapkan file Excel", type="primary"):
+if st.button("Siapkan file", type="primary"):
     keterangan = []
     if cari:
         keterangan.append(f"Pencarian: '{cari}'")
@@ -115,24 +123,27 @@ if st.button("Siapkan file Excel", type="primary"):
         keterangan.append(f"Periode {dari:%d-%m-%Y} s.d. {sampai:%d-%m-%Y}")
     stempel = datetime.now().strftime("%Y%m%d_%H%M")
 
-    with st.spinner(f"Menyiapkan Excel untuk {len(ids)} responden..."):
+    with st.spinner(f"Menyiapkan file untuk {len(ids)} responden..."):
         data_responden = db.get_respondents_detail(ids)
-        isi = build_excel(data_responden, " | ".join(keterangan))
+        if jenis_format == "excel":
+            isi = build_excel(data_responden, " | ".join(keterangan))
+            nama = f"rekap_kompetensi_{stempel}.xlsx"
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            isi = build_zip(data_responden)
+            nama = f"laporan_pdf_kompetensi_{stempel}.zip"
+            mime = "application/zip"
 
     st.session_state["export_massal"] = {
-        "kunci": kunci_export,
-        "isi": isi,
-        "nama": f"rekap_kompetensi_{stempel}.xlsx",
+        "kunci": kunci_export, "isi": isi, "nama": nama, "mime": mime,
     }
 
 hasil = st.session_state.get("export_massal")
-if hasil and hasil["kunci"] == kunci_export:
-    st.download_button(
-        f"⬇️ Unduh {hasil['nama']}", data=hasil["isi"], file_name=hasil["nama"],
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+if hasil and hasil.get("kunci") == kunci_export:
+    st.download_button(f"⬇️ Unduh {hasil['nama']}", data=hasil["isi"],
+                       file_name=hasil["nama"], mime=hasil["mime"])
 elif hasil:
-    st.caption("Filter berubah. Klik **Siapkan file Excel** lagi.")
+    st.caption("Filter atau format berubah. Klik **Siapkan file** lagi.")
 
 # ---------------------------------------------------------------------------
 # Detail responden
