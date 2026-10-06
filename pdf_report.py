@@ -44,6 +44,9 @@ def _styles() -> dict:
         "kecil": ParagraphStyle("k", parent=normal, fontSize=8.5,
                                 textColor=colors.HexColor("#444444")),
         "tebal": ParagraphStyle("b", parent=normal, fontName="Helvetica-Bold"),
+        "kotak": ParagraphStyle("kotak", parent=normal, backColor=WARNA_LATAR,
+                                borderColor=WARNA_GARIS, borderWidth=0.5, borderPadding=6,
+                                leftIndent=6, rightIndent=6, spaceBefore=6, spaceAfter=10),
         "header": ParagraphStyle("sh", parent=normal, fontName="Helvetica-Bold",
                                  textColor=colors.white),
         "sel": ParagraphStyle("sel", parent=normal, fontSize=8.5, leading=11),
@@ -109,7 +112,7 @@ def _story_responden(r: dict, s: dict) -> list:
         ["Tanggal pengisian", _tgl(r["tanggal_pengisian"])],
     ]
     t = Table([[_p(a, s["tebal"]), _p(b, s["normal"])] for a, b in identitas],
-              colWidths=[5 * cm, 12 * cm])
+              colWidths=[5 * cm, 11.5 * cm])
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
         ("BACKGROUND", (0, 0), (0, -1), WARNA_LATAR),
@@ -135,7 +138,7 @@ def _story_responden(r: dict, s: dict) -> list:
         rows.append([_p("Total / Rata-rata", s["tebal"]),
                      _p(f"{sum(skor_list)} / {rata:.2f}", s["tebal"]),
                      _p(LABEL_SKOR.get(round(rata), "-"), s["tebal"]), _p("", s["normal"])])
-    t = Table(rows, colWidths=[8.5 * cm, 2.5 * cm, 3.5 * cm, 2.5 * cm], repeatRows=1)
+    t = Table(rows, colWidths=[8 * cm, 2.4 * cm, 3.6 * cm, 2.5 * cm], repeatRows=1)
     t.setStyle(TableStyle([
         ("GRID", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
         ("BACKGROUND", (0, 0), (-1, 0), WARNA_UTAMA),
@@ -158,14 +161,8 @@ def _story_responden(r: dict, s: dict) -> list:
             _p(f"Pertanyaan: {k['pertanyaan']}", s["kecil"]),
             Spacer(1, 4),
         ]))
-        kotak = Table([[_p(j["jawaban"], s["normal"])]], colWidths=[17 * cm])
-        kotak.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 0.5, WARNA_GARIS),
-            ("BACKGROUND", (0, 0), (-1, -1), WARNA_LATAR),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(kotak)
+        # Paragraf berlatar (bukan tabel) agar jawaban panjang bisa berlanjut ke halaman berikutnya
+        story.append(_p(j["jawaban"] or "-", s["kotak"]))
         story.append(Spacer(1, 4))
         sumber = j["sumber"] or "-"
         if j.get("model"):
@@ -200,14 +197,22 @@ def nama_file_aman(teks: str) -> str:
 
 
 def build_zip(respondents: list[dict]) -> bytes:
-    """ZIP berisi satu PDF laporan untuk setiap responden."""
+    """ZIP berisi satu PDF laporan untuk setiap responden.
+
+    Jika PDF satu responden gagal dibuat, responden lain tetap dimasukkan dan
+    dibuat file keterangan GAGAL_... untuk responden tersebut.
+    """
     buf = io.BytesIO()
-    dipakai = set()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for r in respondents:
-            nama = f"laporan_kompetensi_{nama_file_aman(r['nama'])}_{r['id']}.pdf"
-            if nama in dipakai:  # pengaman; ID responden sudah membuat nama unik
-                continue
-            dipakai.add(nama)
-            zf.writestr(nama, build_pdf(r))
+            dasar = f"laporan_kompetensi_{nama_file_aman(r['nama'])}_{r['id']}"
+            try:
+                zf.writestr(f"{dasar}.pdf", build_pdf(r))
+            except Exception as exc:  # noqa: BLE001
+                zf.writestr(
+                    f"GAGAL_{dasar}.txt",
+                    f"PDF untuk responden '{r['nama']}' (ID {r['id']}) gagal dibuat.\n"
+                    f"Error: {type(exc).__name__}: {exc}\n"
+                    "Gunakan export Excel untuk melihat jawaban responden ini.\n",
+                )
     return buf.getvalue()
